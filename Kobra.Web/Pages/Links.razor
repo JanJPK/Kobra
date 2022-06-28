@@ -1,0 +1,112 @@
+﻿@page "/links"
+
+<PageTitle>Links</PageTitle>
+
+@using Kobra.Model
+@using Kobra.Model.Dto
+@using Kobra.Service
+@inject LinkService LinkService
+@inject DownloaderService downloaderService;
+
+<h1>Links</h1>
+
+<label>Single</label>
+<EditForm Model="@newLink" OnValidSubmit="@HandleSubmit">
+    <DataAnnotationsValidator />
+    <InputText id="url" @bind-Value="newLink.Url" />
+    <InputText id="name" @bind-Value="newLink.Title" />
+    <button type="submit">Submit</button>
+    <ValidationSummary />
+</EditForm>
+
+<label>Bulk</label>
+<EditForm Model="@bulk" OnValidSubmit="@HandleBulkSubmit">
+    <InputText id="bulk" @bind-Value="bulk" />
+    <button type="submit">Submit</button>
+    <ValidationSummary />
+</EditForm>
+
+@if (links == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th width="10"></th>
+                <th>Url</th>
+                <th>Name</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var link in links)
+            {
+                <tr>
+                    <td><button @onclick="() => HandleDelete(link)">x</button></td>
+                    <td>@link.Url</td>
+                    <td>@link.Title</td>
+                    <td>@link.DownloadStatus</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private string bulk = string.Empty;
+    private Link newLink = new();
+    private IList<Link>? links;
+
+    protected override async Task OnInitializedAsync()
+    {
+        links = await LinkService.GetAsync();
+    }
+
+    private async Task RefreshLinks()
+    {
+        links = await LinkService.GetAsync();
+        await InvokeAsync(() => StateHasChanged());
+    }
+
+    private async Task Download(Link link)
+    {
+        var downloadNow = true;
+        link.DownloadStatus = downloadNow
+            ? Model.Enum.DownloadStatus.Active
+            : Model.Enum.DownloadStatus.Idle;
+        await LinkService.InsertAsync(link);
+        await RefreshLinks();
+
+        if (downloadNow)
+        {
+            await downloaderService.Download(link.Id);
+            await RefreshLinks();
+        }
+    }
+
+    private async void HandleSubmit()
+    {
+        var temp = newLink;
+        newLink = new();
+        await Download(temp);
+    }
+
+    private async void HandleBulkSubmit()
+    {
+        var links = new List<Link>();
+        bulk = string.Empty;
+        foreach (var link in links)
+        {
+            await Download(link);
+        }
+    }
+
+    private async void HandleDelete(Link link)
+    {
+        await LinkService.DeleteAsync(link.Id!);
+        await RefreshLinks();
+    }
+}
